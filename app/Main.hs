@@ -13,10 +13,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE NoMonomorphismRestriction #-} -- ? testing
+{-# LANGUAGE ImpredicativeTypes #-}
 module Main where
 
 import GHC.TypeLits
+import GHC.Exts
 
 -- linear types = stack frames
 -- xa # nm -> b
@@ -76,6 +79,7 @@ main = print 5
 
 
 -- where linear types , where sat/ bindings
+-- class Determines a b x | a -> b, b -> a, x -> a, a -> x, x -> b ,b -> x
 class Determines a b | a -> b, b -> a
 
 class  MiniScript a where
@@ -85,13 +89,18 @@ class BTCScript a where
   type BTCscript a
 
 class  Policy a where
-  type Compiler a -- dsl for type level computation
+  type Compiler a = c | c -> a -- dsl for type level computation -- add a type family dependency
+  -- add a type family dependency
 
-data MiniMapping = forall mini btc policy. MMap (Compiler policy) (Mscript mini) (BTCscript btc)
+data Geometry sign = Projection (MiniMapping sign)
+data MiniMapping p = forall mini btc policy. p ~ policy => MMap (Compiler policy) (Mscript mini) (BTCscript btc)
 
-
-class (forall a b. (BTCScript b , MiniScript a) => Determines a b) => Mapping x where
-  compile :: MMap x b c -> Mscript b -> BTCscript c
+-- (x :: (Determines a b (c :: Compiler p) => c ~ z) => Compiler p)
+-- MMap x b a ~ c
+-- p (c :: MiniMapping p)
+-- Determines a b x
+class (forall a b. (BTCScript b , MiniScript a, (Any => a), (Any => b)) => Determines a b ) => Mapping (x :: Compiler p) where
+  compile :: Geometry (MMap x b c :: MiniMapping p) -> Mscript b -> BTCscript c
 
 
 
