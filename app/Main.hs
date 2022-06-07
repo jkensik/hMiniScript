@@ -14,8 +14,9 @@
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE RankNTypes #-}
-{-# LANGUAGE NoMonomorphismRestriction #-} -- ? testing
+-- {-# LANGUAGE NoMonomorphismRestriction #-} -- ? testing
 {-# LANGUAGE ImpredicativeTypes #-}
+{-# LANGUAGE ConstraintKinds #-}
 module Main where
 
 import GHC.TypeLits
@@ -81,41 +82,80 @@ main = print 5
 -- where linear types , where sat/ bindings
 -- class Determines a b x | a -> b, b -> a, x -> a, a -> x, x -> b ,b -> x
 class Determines a b | a -> b, b -> a
-
+-- a and b must be constraint? interesting
+-- maybe add an annotation or a custom error?
 class  MiniScript a where
-  type Mscript a
+  type Mscript a -- :: Constraint
 
 class BTCScript a where
-  type BTCscript a
+  type BTCscript a -- :: Constraint
 
 class  Policy a where
   type Compiler a = c | c -> a -- dsl for type level computation -- add a type family dependency
   -- add a type family dependency , it worked
 
-data Geometry sign = Projection MiniMapping -- use a closed type function to get a and b minimapping
-data MiniMapping = forall mini btc policy. MMap (Compiler policy) (Mscript mini) (BTCscript btc)
+data Geometry sign = Projection (MiniMapping) -- use a closed type function to get a and b minimapping
+data MiniMapping = forall policy. MMap (Compiler policy) -- use kinds to overlap type family instances
 
 -- p ~ policy =>
 -- (x :: (Determines a b (c :: Compiler p) => c ~ z) => Compiler p)
 -- MMap x b a ~ c
 -- p (c :: MiniMapping p)
 -- Determines a b x
-class (forall a b. (BTCScript b , MiniScript a, (Any => a), (Any => b)) => Determines a b ) => Mapping x where
-  compile :: Geometry (MMap x a b) -> Mscript a -> BTCscript b
+class ((Any => a, Any => b) => Determines a b) => Mapping x a b where
+  compile :: Geometry (MMap x) -> Mscript a -> BTCscript b
 
 
+instance (Determines a b) => Mapping (x :: Compiler "fees" ) a b where -- prove constraint
+  compile stuff a = X -- undefined -- take type here
+-- add a custom error to remind to prove injectivity
+-- add a custom error to implement policy before mapping
 
-instance MiniScript "k" where
-  type Mscript "k" = Minicons
+instance Policy "fees" where
+  type Compiler "fees" = LowFees
+
+data LowFees = Fee
+
+type family K :: Constraint
+
+instance a ~ K => MiniScript a where -- change k to a constraint kind
+  type Mscript a = Minicons
 
 data Minicons = T
 
-instance BTCScript "k"  where
-  type BTCscript "k" = BTCcons
+instance a ~ K => BTCScript a  where
+  type BTCscript a = BTCcons
 
 data BTCcons = X | Y Int Float
+
+
+instance Policy "malleability" where
+  type Compiler "malleability" = Segwit
+
+data Segwit = O | N
+
+type family Y :: Constraint -- something needs to wrap Y
+
+instance a ~ Y => MiniScript a where
+ type Mscript a = MCommute
+
+data MCommute = M | C
+
+
+instance (Determines a b) => Mapping (x :: Compiler "malleability" ) a b where -- prove constraint
+  compile stuff a = _a -- undefined -- take type here
+
+
+
+
+
+
+
 
 
 -- (Policy a => Mapping a) => SecureMap a
 -- mapping a = how to split tap tree multi sig
 -- expensive verify?
+
+
+-- this approach allows you to enforce traits of data families
